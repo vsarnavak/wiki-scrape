@@ -29,7 +29,7 @@ def generate_font_css(font_path, font_name):
     }}
     """
 
-async def save_wikipedia_article_as_pdf(url, output_filename, domain, code):
+async def save_wikipedia_article_as_pdf(url, output_filename, code, chrome_path, user_agent):
     """
     Renders a Wikipedia article as a PDF.
 
@@ -90,10 +90,12 @@ async def save_wikipedia_article_as_pdf(url, output_filename, domain, code):
     font_css = generate_font_css(paragraph_font_path, 'CustomFont')
     css_string = css_string.replace("--font--", font_css)
 
-    chrome_path = "C:/Program Files/Google/Chrome/Application/chrome.exe"
+    
     browser = await launch(headless=True, executablePath = chrome_path)
+    output_dir = "dumps_full"
     # Open a new page (tab) in the browser
     page = await browser.newPage()
+    await page.setUserAgent(user_agent)
 
     try:
         print(f"Navigating to {url}...")
@@ -128,23 +130,13 @@ async def save_wikipedia_article_as_pdf(url, output_filename, domain, code):
             'content': css_string
         })
 
-        header_html = """
-            <div style="font-size: 10px; width: 100%; margin: 0 20px; color: #555;">
-                <span style="float: left;">My Company Document</span>
-                <span style="float: right;">Confidential</span>
-            </div>
-        """
-        footer_html = """
-            <div style="font-size: 10px; width: 100%; margin: 0 20px; color: #555; text-align: right;">
-                <span class="pageNumber"></span> / <span class="totalPages"></span>
-            </div>
-        """
-
         # await page.emulateMedia('screen') # Code to get the screen view instead of the print view
 
 
         # Generate the PDF with some print options
-        pdf_path = f"scaled/{domain}/pdf/{code}/{output_filename}.pdf"
+        os.makedirs(f"{output_dir}/{code}/pdf/", exist_ok = True)
+        os.makedirs(f"{output_dir}/{code}/html/", exist_ok = True)
+        pdf_path = f"{output_dir}/{code}/pdf/{output_filename}.pdf"
         await page.pdf({
             'path': pdf_path,
             'width': random_width, 
@@ -167,7 +159,7 @@ async def save_wikipedia_article_as_pdf(url, output_filename, domain, code):
         print(f"Successfully saved PDF to {pdf_path}")
 
         # Save as HTML
-        html_filename = f"scaled/{domain}/html/{code}/{output_filename}.html"
+        html_filename = f"{output_dir}/{code}/html/{output_filename}.html"
         html_content = await page.content()
         with open(html_filename, 'w', encoding='utf-8') as f:
             f.write(html_content)
@@ -178,27 +170,51 @@ async def save_wikipedia_article_as_pdf(url, output_filename, domain, code):
         await browser.close()
 
 
-count = 0
+# df = pd.read_csv('master.csv')
 
-df = pd.read_csv('master.csv')
+# # Manage current index in master csv file
+# df = df[337:]
 
-# Manage current index in master csv file
-df = df[337:]
+# for index, row in df.iterrows():
+    
+#     pdf_name = row['Keyword'].replace(' ', '_')
+#     domain = row['Domain']
+#     lang_codes = ["as", "bn", "gu", "hi", "kn", "ml", "mr", "or", "ta", "te"]
+
+#     for code in lang_codes:
+#         if not pd.isna(row[f"{code}_wiki_link"]):
+#             pdf_name2 = f"{pdf_name}_{code}"
+#             url = row[f"{code}_wiki_link"]
+#             # Run the asynchronous function
+#             asyncio.get_event_loop().run_until_complete(
+#                 save_wikipedia_article_as_pdf(url, pdf_name2, domain, code)
+#             )
+#             time.sleep(0.5)
 global skipped_pages
 skipped_pages = []
-for index, row in df.iterrows():
-    
-    pdf_name = row['Keyword'].replace(' ', '_')
-    domain = row['Domain']
-    lang_codes = ["as", "bn", "gu", "hi", "kn", "ml", "mr", "or", "ta", "te"]
-    for code in lang_codes:
-        if not pd.isna(row[f"{code}_wiki_link"]):
-            pdf_name2 = f"{pdf_name}_{code}"
-            url = row[f"{code}_wiki_link"]
-            # Run the asynchronous function
-            asyncio.get_event_loop().run_until_complete(
-                save_wikipedia_article_as_pdf(url, pdf_name2, domain, code)
-            )
-            time.sleep(0.5)
+lang_codes = ["as", "bn", "gu", "hi", "kn", "ml", "mr", "or", "ta", "te"]
+
+dumps_folder = "wiki_dumps"
+lang_to_use = "gu"
+chrome_path = "C:/Program Files/Google/Chrome/Application/chrome.exe"
+user_agent = "Gujarati Wikipedia PDF Bot (21f3002273@ds.study.iitm.ac.in)"
+
+file_path = f"{dumps_folder}/{lang_to_use}wiki-latest-all-titles-in-ns0.txt"
+count = 0
+
+with open(file_path, 'r', encoding = 'utf-8') as file:
+    for line in file:
+        count += 1
+        if count == 1:
+            continue
+        url = line[:-2]
+        output_filename = url.split('/')[-1][:-2]
+        code = lang_to_use
+        # Run the asynchronous function
+        asyncio.get_event_loop().run_until_complete(
+            save_wikipedia_article_as_pdf(url, output_filename, code, chrome_path, user_agent)
+        )
+        time.sleep(0.5)
+
 
 print("Skipped pages :", skipped_pages)
